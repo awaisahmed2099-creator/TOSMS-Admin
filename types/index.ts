@@ -85,8 +85,10 @@ export interface Ride {
   routeName: string;
   assignedDriverId: string;
   driverName: string;
-  status: "ongoing" | "completed" | "cancelled";
+  status: "scheduled" | "active" | "completed";
   date: string;
   departureTime?: string;
   reachedStops?: any[];
+  studentIds?: string[];
+  boardedStudents?: string[];
 }

@@ -2,11 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-
-import { auth, db } from "@/lib/firebase";
-import { COLLECTIONS } from "@/lib/collections";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,32 +11,42 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-const handleLogin = async (e: React.FormEvent) => {
-  e.preventDefault();
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  setLoading(true);
-  setError("");
+    console.log("Login button clicked");
 
-  try {
-    // TEMP MOCK LOGIN (NO FIREBASE REQUIRED)
-    if (email === "admin@test.com" && password === "123456") {
-      router.push("/dashboard");
-    } else {
-      setError("Invalid credentials (use admin@test.com / 123456)");
+    setLoading(true);
+    setError("");
+
+    try {
+      // ✅ MOCK LOGIN (WORKING)
+      if (email === "admin@test.com" && password === "1234567") {
+        console.log("Login success");
+
+        // small delay for smooth UX
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 500);
+      } else {
+        setError("Invalid credentials (use admin@test.com / 1234567)");
+      }
+    } catch (err: any) {
+      setError("Something went wrong");
+    } finally {
+      setLoading(false);
     }
-  } catch (err: any) {
-    setError(err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <form
         onSubmit={handleLogin}
         className="bg-white p-8 rounded-xl shadow-md w-96 space-y-4"
       >
-        <h1 className="text-2xl font-bold text-center">TOSMS Admin Login</h1>
+        <h1 className="text-2xl font-bold text-center">
+          TOSMS Admin Login
+        </h1>
 
         <input
           type="email"
@@ -66,7 +71,7 @@ const handleLogin = async (e: React.FormEvent) => {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-black text-white p-2 rounded"
+          className="w-full bg-black text-white p-2 rounded hover:bg-gray-800 transition"
         >
           {loading ? "Logging in..." : "Login"}
         </button>

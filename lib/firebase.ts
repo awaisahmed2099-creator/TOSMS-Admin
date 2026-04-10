@@ -12,10 +12,19 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase only on client side and if config is valid
+let app: any;
+let auth: any;
+let db: any;
+let storage: any;
 
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+const isConfigValid = firebaseConfig.apiKey && firebaseConfig.projectId;
+
+if (typeof window !== 'undefined' && isConfigValid) {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
+}
 
 export { app, auth, db, storage };
