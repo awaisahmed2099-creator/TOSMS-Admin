@@ -13,9 +13,6 @@ import {
   GraduationCap,
   Map,
   Navigation,
-  CheckCircle,
-  XCircle,
-  Clock,
   UserCheck,
   DollarSign,
 } from "lucide-react";
@@ -29,7 +26,7 @@ import {
   limit,
 } from "firebase/firestore";
 import { formatDistanceToNow, format } from "date-fns";
-import { User, Route, Availability, FeePayment, Ride } from "@/types";
+import { Route, Availability, FeePayment } from "@/types";
 import { db } from "@/lib/firebase";
 
 interface StatCardProps {
@@ -86,15 +83,23 @@ export default function DashboardPage() {
     pendingDrivers: 0,
   });
 
-  const today = new Date().toISOString().split('T')[0];
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const [[today, tomorrow]] = useState(() => {
+    const now = new Date();
+    const todayValue = now.toISOString().split("T")[0];
+    const tomorrowValue = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+
+    return [[todayValue, tomorrowValue]];
+  });
 
   useEffect(() => {
-    if (!db) return;
+    const firestore = db;
+    if (!firestore) return;
 
     // Total Drivers
     const driversQuery = query(
-      collection(db, COLLECTIONS.USERS),
+      collection(firestore, COLLECTIONS.USERS),
       where("role", "==", "driver")
     );
     const unsubscribeDrivers = onSnapshot(driversQuery, (snapshot) => {
@@ -103,7 +108,7 @@ export default function DashboardPage() {
 
     // Total Students
     const studentsQuery = query(
-      collection(db, COLLECTIONS.USERS),
+      collection(firestore, COLLECTIONS.USERS),
       where("role", "==", "student")
     );
     const unsubscribeStudents = onSnapshot(studentsQuery, (snapshot) => {
@@ -112,7 +117,7 @@ export default function DashboardPage() {
 
     // Active Routes
     const routesQuery = query(
-      collection(db, COLLECTIONS.ROUTES),
+      collection(firestore, COLLECTIONS.ROUTES),
       where("isActive", "==", true)
     );
     const unsubscribeRoutes = onSnapshot(routesQuery, (snapshot) => {
@@ -121,7 +126,7 @@ export default function DashboardPage() {
 
     // Today's Rides
     const ridesQuery = query(
-      collection(db, COLLECTIONS.RIDES),
+      collection(firestore, COLLECTIONS.RIDES),
       where("date", "==", today),
       where("status", "in", ["ongoing"])
     );
@@ -138,16 +143,17 @@ export default function DashboardPage() {
   }, [today]);
 
   useEffect(() => {
-    if (!db) return;
+    const firestore = db;
+    if (!firestore) return;
 
     // Availability Summary for tomorrow
     const availabilityQuery = query(
-      collection(db, COLLECTIONS.AVAILABILITY),
+      collection(firestore, COLLECTIONS.AVAILABILITY),
       where("date", "==", tomorrow)
     );
     const unsubscribeAvailability = onSnapshot(availabilityQuery, (snapshot) => {
       const availabilities = snapshot.docs.map(doc => doc.data() as Availability);
-      const routesQuery = query(collection(db, COLLECTIONS.ROUTES), where("isActive", "==", true));
+      const routesQuery = query(collection(firestore, COLLECTIONS.ROUTES), where("isActive", "==", true));
       const unsubscribeRoutes = onSnapshot(routesQuery, (routesSnapshot) => {
         const routes = routesSnapshot.docs.map(doc => doc.data() as Route);
         const summary: AvailabilitySummary[] = routes.map(route => {
@@ -174,16 +180,17 @@ export default function DashboardPage() {
   }, [tomorrow]);
 
   useEffect(() => {
-    if (!db) return;
+    const firestore = db;
+    if (!firestore) return;
 
     // Recent Activity
     const paymentsQuery = query(
-      collection(db, COLLECTIONS.FEE_PAYMENTS),
+      collection(firestore, COLLECTIONS.FEE_PAYMENTS),
       orderBy("submittedAt", "desc"),
       limit(10)
     );
     const availabilityQuery = query(
-      collection(db, COLLECTIONS.AVAILABILITY),
+      collection(firestore, COLLECTIONS.AVAILABILITY),
       orderBy("markedAt", "desc"),
       limit(5)
     );
@@ -208,10 +215,7 @@ export default function DashboardPage() {
           initials: avail.userName.split(' ').map(n => n[0]).join('').toUpperCase(),
         }));
 
-        setRecentActivity([...paymentActivities, ...availActivities].sort((a, b) => {
-          // Sort by time, but since we have timeAgo, maybe just combine and limit to 15
-          return 0; // For simplicity, just combine
-        }).slice(0, 15));
+        setRecentActivity([...paymentActivities, ...availActivities].slice(0, 15));
       });
 
       return () => unsubscribeAvailability();
@@ -221,15 +225,16 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!db) return;
+    const firestore = db;
+    if (!firestore) return;
 
     // Pending Actions
     const paymentsQuery = query(
-      collection(db, COLLECTIONS.FEE_PAYMENTS),
+      collection(firestore, COLLECTIONS.FEE_PAYMENTS),
       where("paymentStatus", "==", "pending")
     );
     const driversQuery = query(
-      collection(db, COLLECTIONS.USERS),
+      collection(firestore, COLLECTIONS.USERS),
       where("role", "==", "driver"),
       where("approved", "==", false)
     );
@@ -282,7 +287,7 @@ export default function DashboardPage() {
       <Card className="bg-white border border-gray-200 rounded-lg shadow-sm">
         <CardHeader>
           <CardTitle className="text-lg font-semibold">
-            Tomorrow's Availability Report - {format(new Date(), 'dd/MM/yyyy')}
+            Tomorrow&apos;s Availability Report - {format(new Date(), 'dd/MM/yyyy')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">

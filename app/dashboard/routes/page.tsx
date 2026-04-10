@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Plus,
-  MapPin,
   Clock,
   DollarSign,
   Users,
@@ -15,7 +14,6 @@ import {
   X,
   ToggleLeft,
   ToggleRight,
-  UserPlus,
   UserMinus,
 } from "lucide-react";
 import { db } from "@/lib/firebase";

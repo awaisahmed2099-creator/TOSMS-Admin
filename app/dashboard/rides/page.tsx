@@ -1,20 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import {
   Plus,
-  Calendar,
   Clock,
   MapPin,
   Users,
@@ -32,11 +24,9 @@ import {
   orderBy,
   addDoc,
   serverTimestamp,
-  doc,
-  updateDoc,
 } from "firebase/firestore";
 import { format } from "date-fns";
-import { Ride, Route, User } from "@/types";
+import { Ride, Route } from "@/types";
 
 interface RideWithDetails extends Ride {
   availableStudents?: number;
@@ -227,7 +217,7 @@ export default function RidesPage() {
 
       {/* Today's Rides Section */}
       <div>
-        <h2 className="text-lg font-semibold mb-4">Today's Rides</h2>
+        <h2 className="text-lg font-semibold mb-4">Today&apos;s Rides</h2>
         {todaysRides.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-center text-gray-500">
@@ -447,12 +437,12 @@ export default function RidesPage() {
                   <label className="text-sm font-medium text-gray-700 mb-2 block">Stops Reached</label>
                   {selectedRide.reachedStops && selectedRide.reachedStops.length > 0 ? (
                     <div className="space-y-2">
-                      {selectedRide.reachedStops.map((stop: any, index: number) => (
+                      {selectedRide.reachedStops.map((stop, index) => (
                         <div key={index} className="flex items-center p-2 bg-green-50 rounded">
                           <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
                           <span>{stop.stopName || `Stop ${index + 1}`}</span>
                           <span className="ml-auto text-sm text-gray-500">
-                            {stop.timestamp ? format(new Date(stop.timestamp), "HH:mm") : ""}
+                            {stop.timestamp ? format(stop.timestamp.toDate(), "HH:mm") : ""}
                           </span>
                         </div>
                       ))}

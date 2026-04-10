@@ -25,7 +25,8 @@ export default function LoginPage() {
       } else {
         setError("Invalid credentials (use admin@test.com / 1234567)");
       }
-    } catch (err: any) {
+    } catch (error: unknown) {
+      console.error(error);
       setError("Something went wrong");
     } finally {
       setLoading(false);

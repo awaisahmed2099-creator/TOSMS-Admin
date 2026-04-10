@@ -9,29 +9,24 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(""):
+  const [error, setError] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    console.log("Login button clicked");
 
     setLoading(true);
     setError("");
 
     try {
-      // ✅ MOCK LOGIN (WORKING)
       if (email === "admin@test.com" && password === "1234567") {
-        console.log("Login success");
-
-        // small delay for smooth UX
         setTimeout(() => {
           router.push("/dashboard");
         }, 500);
       } else {
         setError("Invalid credentials (use admin@test.com / 1234567)");
       }
-    } catch (err: any) {
+    } catch (error: unknown) {
+      console.error(error);
       setError("Something went wrong");
     } finally {
       setLoading(false);
