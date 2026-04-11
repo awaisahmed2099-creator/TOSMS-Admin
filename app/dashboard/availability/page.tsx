@@ -23,6 +23,7 @@ import {
   onSnapshot,
   orderBy,
 } from "firebase/firestore";
+import { useMockData, mockRoutes, mockAvailability } from "@/lib/mock";
 import { format, addDays, isAfter, setHours, setMinutes } from "date-fns";
 import { Availability, Route } from "@/types";
 
@@ -75,6 +76,10 @@ export default function AvailabilityPage() {
 
   // Fetch routes
   useEffect(() => {
+    if (useMockData) {
+      setRoutes(mockRoutes);
+      return;
+    }
     if (!db) return;
 
     const unsubscribe = onSnapshot(
@@ -93,6 +98,11 @@ export default function AvailabilityPage() {
 
   // Fetch availabilities for selected date
   useEffect(() => {
+    if (useMockData) {
+      setAvailabilities(mockAvailability.filter((a) => a.date === selectedDate));
+      setLoading(false);
+      return;
+    }
     if (!db || !selectedDate) return;
 
     const unsubscribe = onSnapshot(

@@ -35,6 +35,7 @@ import {
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import { useMockData, mockStudents, mockRoutes, mockPayments } from "@/lib/mock";
 import { User, Route as RouteType, FeePayment } from "@/types";
 import { format } from "date-fns";
 
@@ -69,7 +70,13 @@ export default function StudentsPage() {
   const isFirebaseConfigured = !!db;
 
   useEffect(() => {
-    if (!db) return;
+    if (useMockData) {
+      setStudents(mockStudents);
+      setRoutes(mockRoutes);
+      setFeePayments(mockPayments);
+      return;
+    }
+    if (!db || !currentMonth) return;
 
     // Fetch students
     const studentsQuery = query(
@@ -96,6 +103,8 @@ export default function StudentsPage() {
     const unsubscribeFees = onSnapshot(feeQuery, (snapshot) => {
       const feeData = snapshot.docs.map(doc => doc.data() as FeePayment);
       setFeePayments(feeData);
+    }, (error) => {
+      console.error("Error fetching fee payments:", error);
     });
 
     return () => {

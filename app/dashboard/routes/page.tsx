@@ -31,6 +31,7 @@ import {
   arrayRemove,
 } from "firebase/firestore";
 import { Route, User } from "@/types";
+import { useMockData, mockRoutes, mockDrivers, mockStudents } from "@/lib/mock";
 import dynamic from "next/dynamic";
 
 // Dynamically import map component to avoid SSR issues
@@ -70,6 +71,16 @@ export default function RoutesPage() {
   const isFirebaseConfigured = !!db;
 
   useEffect(() => {
+    if (useMockData) {
+      const enrichedRoutes = mockRoutes.map(route => ({
+        ...route,
+        studentCount: route.studentIds?.length || 0,
+      }));
+      setRoutes(enrichedRoutes);
+      setDrivers(mockDrivers);
+      setStudents(mockStudents);
+      return;
+    }
     if (!db) return;
 
     // Fetch routes

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -28,6 +29,13 @@ import {
 import { formatDistanceToNow, format } from "date-fns";
 import { Route, Availability, FeePayment } from "@/types";
 import { db } from "@/lib/firebase";
+import {
+  useMockData,
+  mockDashboardStats,
+  mockAvailabilitySummary,
+  mockRecentActivity,
+  mockPendingActions,
+} from "@/lib/mock";
 
 interface StatCardProps {
   title: string;
@@ -38,7 +46,7 @@ interface StatCardProps {
 
 function StatCard({ title, value, subtitle, icon }: StatCardProps) {
   return (
-    <Card className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+    <Card className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-lg hover:scale-105 hover:bg-gray-50 transition-all duration-300 cursor-pointer">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600">{title}</p>
@@ -69,6 +77,7 @@ interface ActivityItem {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [stats, setStats] = useState({
     totalDrivers: 0,
     totalStudents: 0,
@@ -83,6 +92,14 @@ export default function DashboardPage() {
     pendingDrivers: 0,
   });
 
+  useEffect(() => {
+    if (!useMockData) return;
+    setStats(mockDashboardStats);
+    setAvailabilitySummary(mockAvailabilitySummary);
+    setRecentActivity(mockRecentActivity);
+    setPendingActions(mockPendingActions);
+  }, []);
+
   const [[today, tomorrow]] = useState(() => {
     const now = new Date();
     const todayValue = now.toISOString().split("T")[0];
@@ -95,7 +112,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const firestore = db;
-    if (!firestore) return;
+    if (useMockData) return;
+    if (!firestore || !today) return;
 
     // Total Drivers
     const driversQuery = query(
@@ -132,6 +150,8 @@ export default function DashboardPage() {
     );
     const unsubscribeRides = onSnapshot(ridesQuery, (snapshot) => {
       setStats(prev => ({ ...prev, todaysRides: snapshot.size }));
+    }, (error) => {
+      console.error("Error fetching today's rides:", error);
     });
 
     return () => {
@@ -144,7 +164,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const firestore = db;
-    if (!firestore) return;
+    if (useMockData) return;
+    if (!firestore || !tomorrow) return;
 
     // Availability Summary for tomorrow
     const availabilityQuery = query(
@@ -171,9 +192,13 @@ export default function DashboardPage() {
           };
         });
         setAvailabilitySummary(summary);
+      }, (error) => {
+        console.error("Error fetching routes for availability:", error);
       });
 
       return () => unsubscribeRoutes();
+    }, (error) => {
+      console.error("Error fetching availability:", error);
     });
 
     return () => unsubscribeAvailability();
@@ -181,6 +206,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const firestore = db;
+    if (useMockData) return;
     if (!firestore) return;
 
     // Recent Activity
@@ -226,6 +252,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const firestore = db;
+    if (useMockData) return;
     if (!firestore) return;
 
     // Pending Actions
@@ -284,7 +311,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Availability Summary */}
-      <Card className="bg-white border border-gray-200 rounded-lg shadow-sm">
+      <Card className="bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 transition-all duration-300 animate-in fade-in-0 slide-in-from-bottom-4 duration-500">
         <CardHeader>
           <CardTitle className="text-lg font-semibold">
             Tomorrow&apos;s Availability Report - {format(new Date(), 'dd/MM/yyyy')}
@@ -312,7 +339,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity */}
-        <Card className="bg-white border border-gray-200 rounded-lg shadow-sm">
+        <Card className="bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 transition-all duration-300 animate-in fade-in-0 slide-in-from-left-4 duration-500">
           <CardHeader>
             <CardTitle className="text-lg font-semibold">Recent Activity</CardTitle>
           </CardHeader>
@@ -334,7 +361,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Pending Actions */}
-        <Card className="bg-white border border-gray-200 rounded-lg shadow-sm">
+        <Card className="bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 transition-all duration-300 animate-in fade-in-0 slide-in-from-right-4 duration-500">
           <CardHeader>
             <CardTitle className="text-lg font-semibold">Pending Actions</CardTitle>
           </CardHeader>
@@ -347,7 +374,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-gray-600">{pendingActions.unverifiedPayments} pending</p>
                 </div>
               </div>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" className="hover:bg-blue-50 hover:text-blue-700 transition-all duration-300" onClick={() => router.push('/dashboard/payments')}>
                 Review
               </Button>
             </div>
@@ -359,7 +386,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-gray-600">{pendingActions.pendingDrivers} pending</p>
                 </div>
               </div>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="outline" className="hover:bg-blue-50 hover:text-blue-700 transition-all duration-300" onClick={() => router.push('/dashboard/drivers')}>
                 Approve
               </Button>
             </div>

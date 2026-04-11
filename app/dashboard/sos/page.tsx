@@ -1,309 +1,262 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   collection,
   onSnapshot,
   query,
   orderBy,
-  doc,
-  updateDoc,
-  Timestamp,
 } from "firebase/firestore";
-import { formatDistanceToNow } from "date-fns";
-import { COLLECTIONS } from "@/lib/collections";
 import { db } from "@/lib/firebase";
-import { SOSAlert } from "@/types";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  AlertTriangle,
-  Phone,
-  CheckCircle,
-  MapPin,
-  Clock,
-  User,
-} from "lucide-react";
+import { COLLECTIONS } from "@/lib/collections";
+import { formatDistanceToNow } from "date-fns";
+import { useMockData, mockSOSAlerts } from "@/lib/mock";
 
-export default function SosPage() {
+type SOSAlert = {
+  id: string;
+  studentName: string;
+  studentPhone: string;
+  studentAvatar?: string;
+  routeName: string;
+  driverName: string;
+  driverPhone: string;
+  latitude: number;
+  longitude: number;
+  status: "active" | "resolved";
+  createdAt: Date | any;
+  resolvedAt?: Date | any;
+};
+
+function getDate(value: any) {
+  if (!value) return null;
+  if (typeof value?.toDate === "function") return value.toDate();
+  if (value instanceof Date) return value;
+  return new Date(value);
+}
+
+
+export default function SOSPage() {
   const [alerts, setAlerts] = useState<SOSAlert[]>([]);
-  const [activeAlerts, setActiveAlerts] = useState<SOSAlert[]>([]);
-  const [resolvedAlerts, setResolvedAlerts] = useState<SOSAlert[]>([]);
-  const [loading, setLoading] = useState(true);
+  const prevCount = useRef(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // 🔊 alert sound
   useEffect(() => {
-    if (!db) return;
+    audioRef.current = new Audio(
+      "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg"
+    );
+  }, []);
 
-    const alertsQuery = query(
+  // 🔴 READ ONLY FIRESTORE LISTENER / MOCK DATA
+  useEffect(() => {
+    if (useMockData) {
+      const mockAlerts = mockSOSAlerts.map((item) => ({
+        id: item.alertId,
+        studentName: item.studentName,
+        studentPhone: item.studentPhone,
+        studentAvatar: item.studentAvatar,
+        routeName: item.routeName,
+        driverName: item.driverName,
+        driverPhone: item.driverPhone,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        status: item.status,
+        createdAt: item.createdAt,
+        resolvedAt: item.resolvedAt,
+      }));
+      setAlerts(mockAlerts);
+      prevCount.current = mockAlerts.length;
+      return;
+    }
+
+    const q = query(
       collection(db, COLLECTIONS.SOS_ALERTS),
       orderBy("createdAt", "desc")
     );
 
-    const unsubscribe = onSnapshot(alertsQuery, (snapshot) => {
-      const allAlerts: SOSAlert[] = [];
-      snapshot.forEach((doc) => {
-        allAlerts.push({ ...doc.data(), alertId: doc.id } as SOSAlert);
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data: SOSAlert[] = snapshot.docs.map((doc) => {
+        const d = doc.data() as any;
+
+        return {
+          id: doc.id,
+          studentName: d.studentName,
+          studentPhone: d.studentPhone,
+          studentAvatar: d.studentAvatar,
+          routeName: d.routeName,
+          driverName: d.driverName,
+          driverPhone: d.driverPhone,
+          latitude: d.latitude,
+          longitude: d.longitude,
+          status: d.status,
+          createdAt: d.createdAt,
+          resolvedAt: d.resolvedAt,
+        };
       });
 
-      setAlerts(allAlerts);
-      setActiveAlerts(allAlerts.filter((alert) => alert.status === "active"));
-      setResolvedAlerts(allAlerts.filter((alert) => alert.status === "resolved"));
-      setLoading(false);
-
-      // Check for new active alerts and show notifications
-      const newActiveAlerts = allAlerts.filter(
-        (alert) => alert.status === "active"
-      );
-
-      if (newActiveAlerts.length > 0) {
-        showNotification(newActiveAlerts[0]);
-        playAlertSound();
+      // 🚨 detect new alerts (NO WRITE)
+      if (data.length > prevCount.current) {
+        triggerNotification(data[0]);
+        audioRef.current?.play();
       }
+
+      prevCount.current = data.length;
+      setAlerts(data);
     });
 
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
 
-  const showNotification = (alert: SOSAlert) => {
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("🚨 SOS Alert!", {
-        body: `${alert.studentName} sent an emergency alert on route ${alert.routeName}`,
-        icon: "/favicon.ico",
-        tag: `sos-${alert.alertId}`,
-      });
-    } else if ("Notification" in window && Notification.permission !== "denied") {
-      Notification.requestPermission().then((permission) => {
-        if (permission === "granted") {
-          new Notification("🚨 SOS Alert!", {
-            body: `${alert.studentName} sent an emergency alert on route ${alert.routeName}`,
-            icon: "/favicon.ico",
-            tag: `sos-${alert.alertId}`,
-          });
-        }
+  // 🔔 Browser notification
+  const triggerNotification = (alert: SOSAlert) => {
+    if (Notification.permission === "granted") {
+      new Notification("🚨 SOS Alert", {
+        body: `${alert.studentName} sent an emergency alert`,
       });
     }
   };
 
-  const playAlertSound = () => {
-    // Create a simple alert sound using Web Audio API
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
-
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.5);
-    } catch (error) {
-      console.log("Audio not supported");
+  // ask permission once
+  useEffect(() => {
+    if (Notification.permission !== "granted") {
+      Notification.requestPermission();
     }
-  };
+  }, []);
 
-  const markResolved = async (alertId: string) => {
-    if (!db) return;
+  // 🔴 ACTIVE
+  const activeAlerts = useMemo(
+    () => alerts.filter((a) => a.status === "active"),
+    [alerts]
+  );
 
-    try {
-      const alertRef = doc(db, COLLECTIONS.SOS_ALERTS, alertId);
-      await updateDoc(alertRef, {
-        status: "resolved",
-        resolvedAt: Timestamp.now(),
-      });
-    } catch (error) {
-      console.error("Error marking alert as resolved:", error);
-    }
-  };
-
-  const callStudent = (phone: string) => {
-    window.open(`tel:${phone}`, "_blank");
-  };
-
-  const callDriver = (phone: string) => {
-    window.open(`tel:${phone}`, "_blank");
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-gray-400 animate-pulse" />
-          <p className="text-gray-600">Loading SOS alerts...</p>
-        </div>
-      </div>
-    );
-  }
+  // 🟢 HISTORY
+  const resolvedAlerts = useMemo(
+    () => alerts.filter((a) => a.status === "resolved"),
+    [alerts]
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Active Alerts Banner */}
-      {activeAlerts.length > 0 && (
-        <div className="bg-red-600 text-white p-4 rounded-lg">
-          <div className="flex items-center gap-3">
-            <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-            <h2 className="text-lg font-semibold">
-              {activeAlerts.length} Active Emergency Alert{activeAlerts.length > 1 ? "s" : ""}
-            </h2>
-          </div>
+    <div className="p-4 space-y-6">
+      {useMockData && (
+        <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-yellow-800">
+          Mock SOS data is enabled for local testing.
         </div>
       )}
 
-      {/* Active Alerts Section */}
+      {/* 🚨 ACTIVE BANNER */}
       {activeAlerts.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-xl font-semibold text-gray-900">Active Emergency Alerts</h3>
-          <div className="grid gap-4">
-            {activeAlerts.map((alert) => (
-              <Card key={alert.alertId} className="border-red-200 bg-red-50">
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                        <User className="w-6 h-6 text-red-600" />
-                      </div>
-                      <div className="space-y-2">
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{alert.studentName}</h4>
-                          <p className="text-sm text-gray-600">
-                            Route: {alert.routeName} • Driver: {alert.driverName}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-gray-600">
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-4 h-4" />
-                            {formatDistanceToNow(alert.createdAt.toDate(), { addSuffix: true })}
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <MapPin className="w-4 h-4" />
-                            {alert.latitude.toFixed(6)}, {alert.longitude.toFixed(6)}
-                          </div>
-                        </div>
-                        {alert.message && (
-                          <p className="text-sm text-gray-700 bg-white p-2 rounded border">
-                            "{alert.message}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Badge className="bg-red-100 text-red-800 border-red-200 animate-pulse">
-                        <div className="w-2 h-2 bg-red-500 rounded-full mr-1"></div>
-                        Active
-                      </Badge>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => callStudent(alert.studentPhone)}
-                          className="text-green-600 border-green-200 hover:bg-green-50"
-                        >
-                          <Phone className="w-4 h-4 mr-1" />
-                          Call Student
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => callDriver(alert.driverPhone)}
-                          className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                        >
-                          <Phone className="w-4 h-4 mr-1" />
-                          Call Driver
-                        </Button>
-                      </div>
-                      <Button
-                        size="sm"
-                        onClick={() => markResolved(alert.alertId)}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        Mark Resolved
-                      </Button>
+        <div className="bg-red-600 text-white p-4 rounded-lg flex items-center justify-between animate-pulse">
+          <div className="font-bold">
+            🔴 {activeAlerts.length} Active Emergency Alerts
+          </div>
+          <div className="w-3 h-3 bg-white rounded-full animate-ping"></div>
+        </div>
+      )}
+
+      {/* 🔴 ACTIVE ALERTS */}
+      <div>
+        <h2 className="text-xl font-bold mb-3">Active Alerts</h2>
+
+        {activeAlerts.length === 0 ? (
+          <p className="text-gray-500">No active SOS alerts</p>
+        ) : (
+          <div className="space-y-3">
+            {activeAlerts.map((a) => (
+              <div key={a.id} className="border p-4 rounded-lg bg-red-50">
+                
+                <div className="flex items-center gap-3">
+                  <img
+                    src={a.studentAvatar || "https://via.placeholder.com/40"}
+                    className="w-10 h-10 rounded-full"
+                  />
+
+                  <div>
+                    <div className="font-bold">{a.studentName}</div>
+                    <div className="text-sm text-gray-600">
+                      {a.routeName} • {a.driverName}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+
+                  <span className="ml-auto text-xs bg-red-500 text-white px-2 py-1 rounded-full animate-pulse">
+                    ACTIVE
+                  </span>
+                </div>
+
+                <div className="text-sm mt-2 text-gray-600">
+                  📍 {a.latitude}, {a.longitude}
+                </div>
+
+                <div className="text-xs text-gray-500">
+                  {a.createdAt &&
+                    formatDistanceToNow(getDate(a.createdAt)!, {
+                      addSuffix: true,
+                    })}
+                </div>
+
+                {/* CALL ONLY (SAFE) */}
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() =>
+                      window.open(`tel:${a.studentPhone}`)
+                    }
+                    className="px-3 py-1 bg-blue-500 text-white rounded"
+                  >
+                    Call Student
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      window.open(`tel:${a.driverPhone}`)
+                    }
+                    className="px-3 py-1 bg-purple-500 text-white rounded"
+                  >
+                    Call Driver
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Alert History */}
-      <div className="space-y-4">
-        <h3 className="text-xl font-semibold text-gray-900">Alert History</h3>
+      {/* 🟢 HISTORY */}
+      <div>
+        <h2 className="text-xl font-bold mb-3">
+          Resolved Alerts
+        </h2>
+
         {resolvedAlerts.length === 0 ? (
-          <Card>
-            <CardContent className="p-8 text-center">
-              <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-400" />
-              <p className="text-gray-600">No resolved alerts yet</p>
-            </CardContent>
-          </Card>
+          <p className="text-gray-500">No resolved alerts</p>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Resolved Emergency Alerts</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Student</th>
-                      <th className="text-left p-2">Route</th>
-                      <th className="text-left p-2">Driver</th>
-                      <th className="text-left p-2">Alert Time</th>
-                      <th className="text-left p-2">Resolved Time</th>
-                      <th className="text-left p-2">Duration</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resolvedAlerts.map((alert) => {
-                      const alertTime = alert.createdAt.toDate();
-                      const resolvedTime = alert.resolvedAt?.toDate();
-                      const duration = resolvedTime
-                        ? formatDistanceToNow(alertTime, { addSuffix: false })
-                        : "Unknown";
+          <div className="overflow-x-auto">
+            <table className="w-full border">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="p-2 text-left">Student</th>
+                  <th>Route</th>
+                  <th>Driver</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
 
-                      return (
-                        <tr key={alert.alertId} className="border-b hover:bg-gray-50">
-                          <td className="p-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                                <User className="w-4 h-4 text-gray-600" />
-                              </div>
-                              {alert.studentName}
-                            </div>
-                          </td>
-                          <td className="p-2">{alert.routeName}</td>
-                          <td className="p-2">{alert.driverName}</td>
-                          <td className="p-2 text-sm">
-                            {formatDistanceToNow(alertTime, { addSuffix: true })}
-                          </td>
-                          <td className="p-2 text-sm">
-                            {resolvedTime
-                              ? formatDistanceToNow(resolvedTime, { addSuffix: true })
-                              : "N/A"}
-                          </td>
-                          <td className="p-2">
-                            <Badge variant="secondary" className="bg-green-100 text-green-800">
-                              {duration}
-                            </Badge>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+              <tbody>
+                {resolvedAlerts.map((a) => (
+                  <tr key={a.id} className="border-t">
+                    <td className="p-2">{a.studentName}</td>
+                    <td>{a.routeName}</td>
+                    <td>{a.driverName}</td>
+                    <td>
+                      {a.resolvedAt &&
+                        formatDistanceToNow(
+                          getDate(a.resolvedAt)!,
+                          { addSuffix: true }
+                        )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

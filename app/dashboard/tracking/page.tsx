@@ -2,149 +2,185 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { onSnapshot, query, where, collection } from "firebase/firestore";
-import { COLLECTIONS } from "@/lib/collections";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { LiveLocation, Ride } from "@/types";
-import { format } from "date-fns";
-import { Bus } from "lucide-react";
+import { COLLECTIONS } from "@/lib/collections";
+import { useMockData, mockLiveLocations, mockRides } from "@/lib/mock";
+
+// Types
+type LiveLocation = {
+  id: string;
+  driverId: string;
+  latitude: number;
+  longitude: number;
+  speed?: number;
+  updatedAt?: any;
+};
+
+type Ride = {
+  id: string;
+  routeName: string;
+  driverName: string;
+  status: string;
+};
+
+type LocationData = {
+  id: string;
+  latitude: number;
+  longitude: number;
+  driverName: string;
+  vehicleId: string;
+  timestamp: Date;
+  status: string;
+};
 
 // Dynamically import the map component to avoid SSR issues
-const FleetMap = dynamic(() => import("@/components/FleetMap"), { ssr: false });
+const MapComponent = dynamic(() => import("@/components/MapComponent"), {
+  ssr: false,
+  loading: () => <div className="h-96 bg-gray-100 rounded-lg flex items-center justify-center">Loading map...</div>
+}) as React.ComponentType<{ locations: LocationData[] }>;
 
-interface ActiveRide extends LiveLocation {
-  rideId: string;
+// Format time
+function formatTime(timestamp: any) {
+  if (!timestamp) return "N/A";
+  const date = timestamp.toDate
+    ? timestamp.toDate()
+    : new Date(timestamp);
+  return date.toLocaleTimeString();
 }
 
 export default function TrackingPage() {
   const [liveLocations, setLiveLocations] = useState<LiveLocation[]>([]);
-  const [activeRides, setActiveRides] = useState<ActiveRide[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<LiveLocation | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [rides, setRides] = useState<Ride[]>([]);
 
+  // 🔴 LIVE LOCATIONS (READ ONLY)
   useEffect(() => {
-    if (!db) return;
+    if (useMockData) {
+      setLiveLocations(
+        mockLiveLocations.map((loc) => ({
+          id: loc.locationId,
+          driverId: loc.driverId,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
+          speed: loc.speed,
+          updatedAt: loc.lastUpdated,
+        }))
+      );
+      return;
+    }
 
-    let locations: LiveLocation[] = [];
-    let rides: Ride[] = [];
-
-    // Listen to live locations
-    const liveLocationsUnsubscribe = onSnapshot(
-      query(collection(db, COLLECTIONS.LIVE_LOCATIONS), where("isActive", "==", true)),
+    const unsub = onSnapshot(
+      collection(db, COLLECTIONS.LIVE_LOCATIONS),
       (snapshot) => {
-        locations = [];
-        snapshot.forEach((doc) => {
-          locations.push({ ...doc.data(), locationId: doc.id } as LiveLocation);
-        });
-        setLiveLocations(locations);
+        const data: LiveLocation[] = snapshot.docs.map((doc) => {
+          const d = doc.data() as any;
 
-        // Update combined data
-        updateActiveRides(locations, rides);
+          return {
+            id: doc.id,
+            driverId: d.driverId,
+            latitude: d.latitude,
+            longitude: d.longitude,
+            speed: d.speed || 0,
+            updatedAt: d.lastUpdated || null,
+          };
+        });
+
+        setLiveLocations(data);
       }
     );
 
-    // Listen to active rides
-    const activeRidesUnsubscribe = onSnapshot(
-      query(collection(db, COLLECTIONS.RIDES), where("status", "==", "active")),
-      (snapshot) => {
-        rides = [];
-        snapshot.forEach((doc) => {
-          rides.push({ ...doc.data(), rideId: doc.id } as Ride);
-        });
-
-        // Update combined data
-        updateActiveRides(locations, rides);
-      }
-    );
-
-    const updateActiveRides = (currentLocations: LiveLocation[], currentRides: Ride[]) => {
-      const combined: ActiveRide[] = currentLocations.map(location => {
-        const ride = currentRides.find(r => r.assignedDriverId === location.driverId);
-        return {
-          ...location,
-          rideId: ride?.rideId || "",
-        };
-      });
-      setActiveRides(combined);
-      setLoading(false);
-    };
-
-    return () => {
-      liveLocationsUnsubscribe();
-      activeRidesUnsubscribe();
-    };
+    return () => unsub();
   }, []);
 
-  const handleRideClick = (location: LiveLocation) => {
-    setSelectedLocation(location);
-  };
+  // 🟢 ACTIVE RIDES (READ ONLY)
+  useEffect(() => {
+    if (useMockData) {
+      setRides(
+        mockRides.map((ride) => ({
+          id: ride.rideId,
+          routeName: ride.routeName,
+          driverName: ride.driverName,
+          status: ride.status,
+        }))
+      );
+      return;
+    }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <Bus className="w-12 h-12 mx-auto mb-4 text-gray-400 animate-pulse" />
-          <p className="text-gray-600">Loading fleet tracking...</p>
-        </div>
-      </div>
+    const q = query(
+      collection(db, COLLECTIONS.RIDES),
+      where("status", "==", "active")
     );
-  }
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      const data: Ride[] = snapshot.docs.map((doc) => {
+        const d = doc.data() as any;
+
+        return {
+          id: doc.id,
+          routeName: d.routeName,
+          driverName: d.driverName,
+          status: d.status,
+        };
+      });
+
+      setRides(data);
+    });
+
+    return () => unsub();
+  }, []);
+
+  // Merge data safely
+  const mergedData = liveLocations.map((loc) => {
+    const ride = rides.find((r) => r.driverName === loc.driverId);
+
+    return {
+      id: loc.id,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      driverName: ride?.driverName || "Unknown Driver",
+      vehicleId: loc.driverId,
+      timestamp: loc.updatedAt ? (loc.updatedAt.toDate ? loc.updatedAt.toDate() : new Date(loc.updatedAt)) : new Date(),
+      status: "Active",
+    };
+  });
 
   return (
-    <div className="relative h-screen">
-      {/* Left Sidebar */}
-      <div className="absolute left-0 top-0 z-10 w-80 h-full bg-white shadow-lg overflow-y-auto">
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">Active Rides</h2>
-          <p className="text-sm text-gray-600">{activeRides.length} rides in progress</p>
-        </div>
+    <div className="flex w-full h-[calc(100vh-64px)]">
+      {/* SIDEBAR */}
+      <div className="w-[300px] bg-white border-r overflow-y-auto z-[1000]">
+        <div className="p-3 font-bold border-b">Live Rides</div>
 
-        <div className="p-4 space-y-3">
-          {activeRides.length === 0 ? (
-            <div className="text-center py-8">
-              <Bus className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-gray-500">No active rides right now</p>
-            </div>
-          ) : (
-            activeRides.map((ride) => (
-              <div
-                key={ride.locationId}
-                onClick={() => handleRideClick(ride)}
-                className="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-medium text-gray-900">{ride.routeName}</h3>
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    <div className="w-2 h-2 bg-green-400 rounded-full mr-1 animate-pulse"></div>
-                    Live
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 mb-1">{ride.driverName}</p>
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <span>{ride.speed.toFixed(1)} km/h</span>
-                  <span>{format(ride.lastUpdated.toDate(), "HH:mm:ss")}</span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Map Container */}
-      <div className="absolute right-0 top-0 h-full" style={{ width: "calc(100% - 320px)" }}>
-        <FleetMap liveLocations={liveLocations} selectedLocation={selectedLocation} />
-      </div>
-
-      {/* Empty State Overlay */}
-      {activeRides.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-20">
-          <div className="text-center">
-            <Bus className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Active Rides</h3>
-            <p className="text-gray-600">All vehicles are currently parked</p>
+        {mergedData.length === 0 ? (
+          <div className="p-4 text-center text-gray-500">
+            🚌 No active rides right now
           </div>
-        </div>
-      )}
+        ) : (
+          mergedData.map((item) => (
+            <div
+              key={item.id}
+              className="p-3 border-b hover:bg-gray-100"
+            >
+              <div className="font-semibold">{item.driverName}</div>
+              <div className="text-sm text-gray-600">
+                Vehicle: {item.vehicleId}
+              </div>
+
+              <div className="text-xs mt-1 text-gray-500">
+                Last Updated: {formatTime(item.timestamp)}
+              </div>
+
+              <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full inline-block mt-1">
+                Live
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* MAP */}
+      <div className="flex-1 p-4">
+        <MapComponent locations={mergedData} />
+      </div>
     </div>
   );
 }

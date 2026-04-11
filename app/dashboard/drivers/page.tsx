@@ -34,6 +34,7 @@ import {
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import { useMockData, mockDrivers, mockRoutes } from "@/lib/mock";
 import { User, Route } from "@/types";
 
 type FilterType = "all" | "pending" | "active" | "suspended";
@@ -67,6 +68,11 @@ export default function DriversPage() {
   const isFirebaseConfigured = !!db;
 
   useEffect(() => {
+    if (useMockData) {
+      setDrivers(mockDrivers);
+      setRoutes(mockRoutes);
+      return;
+    }
     if (!db) return;
 
     // Fetch drivers

@@ -25,6 +25,7 @@ import {
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import { useMockData, mockRides, mockRoutes } from "@/lib/mock";
 import { format } from "date-fns";
 import { Ride, Route } from "@/types";
 
@@ -53,9 +54,18 @@ export default function RidesPage() {
   const isFirebaseConfigured = !!db;
 
   useEffect(() => {
-    if (!db) return;
-
     const today = format(new Date(), "yyyy-MM-dd");
+    if (useMockData) {
+      const ridesData = mockRides.map((ride) => ({
+        ...ride,
+        rideId: ride.rideId,
+      } as RideWithDetails));
+      setRides(ridesData);
+      setTodaysRides(ridesData.filter((ride) => ride.date === today));
+      setRoutes(mockRoutes);
+      return;
+    }
+    if (!db) return;
 
     // Fetch all rides ordered by date desc
     const ridesQuery = query(
